@@ -1,6 +1,6 @@
 ﻿namespace Vertical.Blog.Api.Contracts;
 
-public class CreateArticleRequest
+public class GetArticleResponse
 {
     public string Title { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;

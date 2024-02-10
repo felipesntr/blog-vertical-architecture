@@ -68,7 +68,7 @@ public class CreateArticleEndpoint : ICarterModule
 {
     public void AddRoutes(IEndpointRouteBuilder app)
     {
-        app.MapPost("api/articles", async (CreateArticleRequest request, ISender sender) =>
+        app.MapPost("api/articles", async (ArticleResponse request, ISender sender) =>
         {
             var command = request.Adapt<CreateArticle.Command>();
             var result = await sender.Send(command);
