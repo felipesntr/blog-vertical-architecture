@@ -1,30 +1,52 @@
 ﻿using Carter;
+using FluentValidation;
+using Mapster;
 using MediatR;
+using Vertical.Blog.Api.Contracts;
 using Vertical.Blog.Api.Database;
 using Vertical.Blog.Api.Entities;
+using Vertical.Blog.Api.Shared;
 
 namespace Vertical.Blog.Api.Features.Articles;
 
 public static class CreateArticle
 {
-    public class Command : IRequest<Guid>
+    public class Command : IRequest<Result<Guid>>
     {
         public string Title { get; set; } = string.Empty;
         public string Content { get; set; } = string.Empty;
         public List<string> Tags { get; set; } = [];
     }
 
-    internal sealed class Handler : IRequestHandler<Command, Guid>
+    public class Validator : AbstractValidator<Command>
+    {
+        public Validator()
+        {
+            RuleFor(c => c.Title).NotEmpty();
+            RuleFor(c => c.Content).NotEmpty();
+        }
+    }
+
+    internal sealed class Handler : IRequestHandler<Command, Result<Guid>>
     {
         private readonly ApplicationDbContext _dbContext;
+        private readonly IValidator<Command> _validator;
 
         public Handler(ApplicationDbContext dbContext)
         {
             _dbContext = dbContext;
         }
 
-        public async Task<Guid> Handle(Command request, CancellationToken cancellationToken)
+        public async Task<Result<Guid>> Handle(Command request, CancellationToken cancellationToken)
         {
+            var validationResult = _validator.Validate(request);
+            if (!validationResult.IsValid)
+            {
+                return Result.Failure<Guid>(new Error("" +
+                    "CreateArticle.Validation",
+                    validationResult.ToString()));
+            }
+
             var article = new Article
             {
                 Id = Guid.NewGuid(),
@@ -37,20 +59,23 @@ public static class CreateArticle
             _dbContext.Add(article);
             await _dbContext.SaveChangesAsync();
 
-            return article.Id;
+            return Result.Success(article.Id);
         }
     }
 
-    public class Endpoint : ICarterModule
+}
+public class CreateArticleEndpoint : ICarterModule
+{
+    public void AddRoutes(IEndpointRouteBuilder app)
     {
-        public void AddRoutes(IEndpointRouteBuilder app)
+        app.MapPost("api/articles", async (CreateArticleRequest request, ISender sender) =>
         {
-            app.MapPost("api/articles", async (Command command, ISender sender) =>
-            {
-                var articleId = await sender.Send(command);
-                return Results.Ok(articleId);
-            });
-        }
-    }
+            var command = request.Adapt<CreateArticle.Command>();
+            var result = await sender.Send(command);
+            if (result.IsFailure)
+                return Results.BadRequest(result.Error);
 
+            return Results.Ok(result.Value);
+        });
+    }
 }
